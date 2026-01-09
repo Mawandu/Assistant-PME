@@ -1,15 +1,15 @@
-# Assistant PME (StockPilot) 🚀
+# Assistant PME (StockPilot) 
 
 Assistant PME est une solution d'intelligence artificielle conçue pour aider les petites et moyennes entreprises à optimiser leur gestion de stocks et l'analyse de leurs données.
 
-## 🎯 L'Idée
+## L'Idée
 
 L'objectif est de démocratiser l'accès à l'analyse de données pour les gestionnaires de PME. Plutôt que de naviguer dans des tableaux complexes, l'utilisateur interagit avec un **Assistant IA** via un chat pour :
 - Poser des questions sur ses stocks ("Quel est le produit le plus cher ?").
 - Visualiser des tendances ("Affiche un graphique des ventes").
 - Détecter des anomalies (Ruptures de stock, marges faibles).
 
-## 🛠 Méthodologie & Architecture
+## Méthodologie & Architecture
 
 Le projet repose sur une architecture moderne séparant clairement l'interface utilisateur de la logique d'analyse.
 
@@ -28,7 +28,7 @@ Le cœur du système utilise des modèles de langage (LLM) avancés (via **Groq 
 - **Base de Données** : PostgreSQL (Production) / SQLite (Dev) avec SQLAlchemy.
 - **Déploiement** : Configuration optimisée pour Vercel (Monorepo).
 
-## 🚀 Installation & Déploiement
+## Installation & Déploiement
 
 ### Pré-requis
 - Node.js 18+
