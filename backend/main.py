@@ -90,7 +90,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             print(f"Client #{client_id} sent: {data}")
             # Removed "Analyse de votre demande en cours..." to reduce noise
             
-            analysis = await nlp_service.analyze_query(data)
+            analysis = nlp_service.analyze_query(data)
             print(f"   -> NLP Analysis: {analysis}")
             # Removed "AI: {analysis['summary']}" to keep it clean, or we can keep it if useful for debug but user asked to remove "le second message"
             # The user said: "pas le second message qui s'affiche là AI:.... non il faut enlever ça"
@@ -106,7 +106,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 if tenant_id:
                     # Special handling for General Knowledge (chat)
                     if analysis.get("intent") == "GENERAL_KNOWLEDGE":
-                         chat_response = await nlp_service.generate_chat_response(data)
+                         chat_response = nlp_service.generate_chat_response(data)
                          await manager.send_personal_message(f"{chat_response}", websocket)
                     else:
                         result = query_service.execute(db, tenant_id, analysis)

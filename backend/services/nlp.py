@@ -29,19 +29,12 @@ class NLPService:
         self.api_key_groq = os.getenv("GROQ_API_KEY")
         self.api_key_openai = os.getenv("OPENAI_API_KEY")
         self.api_key_google = os.getenv("GOOGLE_API_KEY")
-        
-        self.groq_client = None
-        if self.api_key_groq and Groq:
-            self.groq_client = Groq(api_key=self.api_key_groq)
-            
-        self.openai_client = None
-        if self.api_key_openai and OpenAI:
-            self.openai_client = OpenAI(api_key=self.api_key_openai)
-            
-        if self.api_key_google and genai:
+        self.groq_client = Groq(api_key=self.api_key_groq) if self.api_key_groq else None
+        self.openai_client = OpenAI(api_key=self.api_key_openai) if self.api_key_openai else None
+        if self.api_key_google:
             genai.configure(api_key=self.api_key_google)
 
-    async def analyze_query(self, user_message: str) -> dict:
+    def analyze_query(self, user_message: str) -> dict:
         """
         Analyse la requête utilisateur via LLM (Groq par défaut) pour extraire l'intention et les entités.
         """
@@ -88,8 +81,8 @@ class NLPService:
         """
 
         try:
-            if self.provider == "groq" and self.api_key_groq:
-                return await self._call_groq(system_prompt, user_message)
+            if self.provider == "groq" and self.groq_client:
+                return self._call_groq(system_prompt, user_message)
             elif self.provider == "openai" and self.openai_client:
                 try:
                     response_text = self._call_openai(system_prompt, user_message)
@@ -123,69 +116,46 @@ class NLPService:
                 "summary": f"Erreur lors de l'analyse IA : {str(e)}"
             }
 
-    async def _call_groq(self, system_prompt, user_message):
-        logger.info("Appel à Groq (API via httpx)...")
-        if not self.api_key_groq:
-            return {"intent": "UNKNOWN", "entities": {}, "summary": "Clé API Groq manquante"}
-
-        url = "https://api.groq.com/openai/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self.api_key_groq}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "llama-3.3-70b-versatile",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ],
-            "temperature": 0,
-            "response_format": {"type": "json_object"}
-        }
-
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(url, headers=headers, json=payload, timeout=30.0)
-                response.raise_for_status()
-                data = response.json()
-                content = data['choices'][0]['message']['content']
-                return json.loads(content)
-            except Exception as e:
-                logger.error(f"Erreur API Groq: {e}")
-                return {"intent": "UNKNOWN", "entities": {}, "summary": "Erreur technique Groq"}
-
-    async def generate_chat_response(self, user_message: str) -> str:
+    def generate_chat_response(self, user_message: str) -> str:
         """
         Génère une réponse textuelle libre pour les questions générales / théoriques.
         """
         system_prompt = "You are StockPilot, an expert inventory assistant. Answer the user's question clearly and cleanly. IMPORTANT: Answer IN THE SAME LANGUAGE as the user's question (English or French)."
         
-        if self.provider == "groq" and self.api_key_groq:
-             url = "https://api.groq.com/openai/v1/chat/completions"
-             headers = {
-                "Authorization": f"Bearer {self.api_key_groq}",
-                "Content-Type": "application/json"
-             }
-             payload = {
-                "model": "llama-3.3-70b-versatile",
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message}
-                ],
-                "temperature": 0.7,
-                "max_tokens": 800
-             }
-             try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(url, headers=headers, json=payload, timeout=30.0)
-                    response.raise_for_status()
-                    data = response.json()
-                    return data['choices'][0]['message']['content']
-             except Exception as e:
-                 logger.error(f"Erreur Chat Groq: {e}")
-                 return "Erreur technique."
-        
-        return "Désolé, je ne peux pas générer de réponse (Provider non supporté ou clé manquante)."
+        try:
+            if self.provider == "groq" and self.groq_client:
+                logger.info("Appel à Groq (Chat)...")
+                completion = self.groq_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message}
+                    ],
+                    temperature=0.7,
+                    max_tokens=800
+                )
+                return completion.choices[0].message.content
+            
+            # Fallback simple
+            return "Désolé, je ne peux pas générer de réponse pour le moment."
+            
+        except Exception as e:
+            logger.error(f"Erreur de génération chat: {e}")
+            return "Une erreur technique m'empêche de répondre."
+
+    def _call_groq(self, system_prompt, user_message):
+        logger.info("Appel à Groq (Llama3-70b)...")
+        chat_completion = self.groq_client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            model="llama-3.3-70b-versatile", 
+            temperature=0, 
+            response_format={"type": "json_object"} 
+        )
+        response_content = chat_completion.choices[0].message.content
+        return json.loads(response_content)
 
     def _call_openai(self, system_prompt, user_message):
         logger.info("Appel à OpenAI (GPT-4o)...")
