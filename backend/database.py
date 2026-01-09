@@ -27,6 +27,20 @@ if DATABASE_URL.startswith("postgres://"):
 # FIX: Handle unencoded special characters in password (like @)
 try:
     prefix = "postgresql://"
+    # Masking function for logs
+    def mask_url(url):
+        try:
+            if "@" in url:
+                part1, part2 = url.rsplit("@", 1)
+                if ":" in part1:
+                    u, p = part1.split(":", 1)
+                    return f"{u}:******@{part2}"
+            return "******"
+        except:
+            return "******"
+
+    print(f"🔍 DEBUG: Raw DATABASE_URL: {mask_url(DATABASE_URL)}")
+
     if DATABASE_URL.startswith(prefix) and DATABASE_URL.count("@") > 1:
         import urllib.parse
         # Check if we have multiple @, which implies one is in the password
@@ -37,13 +51,22 @@ try:
             creds, host_part = rest.rsplit("@", 1)
             if ":" in creds:
                 user, password = creds.split(":", 1)
-                # Check if password needs encoding (simple heuristic: contains @ but not encoded)
+                # Check if password needs encoding (look for unencoded @)
                 if "@" in password and "%40" not in password:
                     print(f"⚠️  Detecting unencoded '@' in password. Auto-fixing...")
                     fixed_password = urllib.parse.quote_plus(password)
                     DATABASE_URL = f"{prefix}{user}:{fixed_password}@{host_part}"
+                    print(f"✅ Fixed DATABASE_URL: {mask_url(DATABASE_URL)}")
+    
+    # Verify with make_url
+    from sqlalchemy.engine import make_url
+    u = make_url(DATABASE_URL)
+    print(f"🔍 DEBUG: SQLAlchemy Parsed Host: {u.host}")
+    print(f"🔍 DEBUG: SQLAlchemy Parsed Port: {u.port}")
+    print(f"🔍 DEBUG: SQLAlchemy Parsed Database: {u.database}")
+
 except Exception as e:
-    print(f"⚠️  Error attempting to fix DATABASE_URL: {e}")
+    print(f"⚠️  Error attempting to fix/debug DATABASE_URL: {e}")
 
 
 engine = create_engine(DATABASE_URL)
