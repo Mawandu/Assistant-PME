@@ -3,9 +3,20 @@ import os
 import json
 import logging
 from dotenv import load_dotenv
-from groq import Groq
-from openai import OpenAI
-import google.generativeai as genai
+try:
+    from groq import Groq
+except ImportError:
+    Groq = None
+
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
 
 load_dotenv()
 

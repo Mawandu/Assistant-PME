@@ -364,18 +364,19 @@ async def upload_file(
     """
     Upload a file (Excel or CSV) to ingest data.
     Parses the file and creates/updates Products and StockMovements.
+    (Optimized for Vercel: Uses openpyxl/csv instead of pandas)
     """
     print(f"DEBUG: Received file upload request: {file.filename}")
-    
-    # DEV HACK REMOVED: Now using actual authenticated user.
             
+    # Imports
+    import io
+    import csv 
     try:
-        import pandas as pd
-        import io
-        print("DEBUG: pandas imported successfully.")
-    except ImportError as e:
-        print(f"DEBUG: ImportError - {e}")
-        raise HTTPException(status_code=500, detail="Server misconfiguration: pandas not installed.")
+        from openpyxl import load_workbook
+    except ImportError:
+        # Should be in requirements
+        print("WARNING: openpyxl not found")
+        pass
 
     # 1. Read file content
     try:
@@ -386,7 +387,7 @@ async def upload_file(
         print(f"DEBUG: Error reading file: {e}")
         raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
 
-    # 2. Save file to disk immediately to ensure we have a record
+    # 2. Save file to disk
     import os
     upload_dir = "uploads"
     if not os.path.exists(upload_dir):
@@ -396,17 +397,10 @@ async def upload_file(
     try:
         with open(file_path, "wb") as f:
             f.write(contents)
-        print(f"DEBUG: Saved file to {file_path}")
     except Exception as e:
-        print(f"DEBUG: Error saving file: {e}")
         raise HTTPException(status_code=500, detail=f"Error saving file: {str(e)}")
 
-    # 3. Parse Data
-    # 3. Parse Data Helpers
-    import pandas as pd
-    import io
-
-    # Create DataSource Record FIRST
+    # Create DataSource Record
     try:
         new_ds = models.DataSource(
             name=filename,
@@ -417,131 +411,148 @@ async def upload_file(
             last_sync_at=func.now()
         )
         db.add(new_ds)
-        db.flush() # Get ID
+        db.flush()
         
-        # 3. Parse Data
-        df = None
+        # 3. Parse Data (No Pandas)
+        rows = []
+        
+        column_mapping = {
+            'product': 'name', 'product name': 'name', 'nom produit': 'name', 'nom': 'name', 'designation': 'name', 'libelle': 'name', 'product_name': 'name',
+            'sku': 'sku', 'ref': 'sku', 'reference': 'sku', 'code': 'sku', 'product_id': 'sku',
+            'category': 'category', 'catégorie': 'category', 'famille': 'category',
+            'quantity': 'quantity', 'qty': 'quantity', 'quantité': 'quantity', 'stock': 'quantity', 'qte': 'quantity', 'stock reel': 'quantity', 'quantity_in_stock': 'quantity',
+            'price': 'unit_price', 'prix': 'unit_price', 'unit price': 'unit_price', 'prix unitaire': 'unit_price', 'pamp': 'cost_price', 'coût': 'cost_price', 'cost': 'cost_price',
+            'supplier': 'supplier_name', 'fournisseur': 'supplier_name'
+        }
+
+        def normalize_header(h):
+            return str(h).lower().strip()
+
+        def map_header(h):
+            norm = normalize_header(h)
+            return column_mapping.get(norm, norm)
+
         if filename.endswith('.csv'):
-            df = pd.read_csv(io.BytesIO(contents))
-        elif filename.endswith(('.xls', '.xlsx')):
-            df = pd.read_excel(io.BytesIO(contents))
-        else:
-            # Should normally be caught earlier but safe check
-            # No need to remove file, it's linked to new_ds
-            raise HTTPException(status_code=400, detail="Invalid file format.")
+            # Handle CSV
+            try:
+                content_str = contents.decode('utf-8-sig') # Handle BOM
+            except UnicodeDecodeError:
+                content_str = contents.decode('latin-1') # Fallback
+
+            f_io = io.StringIO(content_str)
+            reader = csv.DictReader(f_io)
             
-        # Process Content if CSV/Excel
-        ingest_status = "COMPLETED"
+            # Remap fieldnames
+            if reader.fieldnames:
+                reader.fieldnames = [map_header(h) for h in reader.fieldnames]
+                rows = list(reader)
+                
+        elif filename.endswith(('.xls', '.xlsx')):
+            # Handle Excel
+            wb = load_workbook(io.BytesIO(contents), data_only=True)
+            ws = wb.active
+            
+            # Extract headers from first row
+            header_row = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), None)
+            if header_row:
+                headers = [map_header(h) if h is not None else f"col_{i}" for i, h in enumerate(header_row)]
+                
+                for row_values in ws.iter_rows(min_row=2, values_only=True):
+                    # Create dict
+                    row_dict = {headers[i]: val for i, val in enumerate(row_values) if i < len(headers)}
+                    rows.append(row_dict)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid file format.")
+
+        # Process logic
         processed_count = 0
         errors = []
 
-        if df is not None:
-             # Standardize columns
-            df.columns = [str(col).lower().strip() for col in df.columns]
-            
-            # Use specific mapping
-            column_mapping = {
-                'product': 'name', 'product name': 'name', 'nom produit': 'name', 'nom': 'name', 'designation': 'name', 'libelle': 'name', 'product_name': 'name',
-                'sku': 'sku', 'ref': 'sku', 'reference': 'sku', 'code': 'sku', 'product_id': 'sku',
-                'category': 'category', 'catégorie': 'category', 'famille': 'category',
-                'quantity': 'quantity', 'qty': 'quantity', 'quantité': 'quantity', 'stock': 'quantity', 'qte': 'quantity', 'stock reel': 'quantity', 'quantity_in_stock': 'quantity',
-                'price': 'unit_price', 'prix': 'unit_price', 'unit price': 'unit_price', 'prix unitaire': 'unit_price', 'pamp': 'cost_price', 'coût': 'cost_price', 'cost': 'cost_price',
-                'supplier': 'supplier_name', 'fournisseur': 'supplier_name'
-            }
-            
-            # Rename columns based on mapping
-            # This logic is simplified; a robust one would check existence
-            # Let's map whatever we find
-            found_mapping = {}
-            for col in df.columns:
-                 if col in column_mapping:
-                     found_mapping[col] = column_mapping[col]
-            df.rename(columns=found_mapping, inplace=True)
+        for index, row in enumerate(rows):
+            try:
+                # Helper for safe access
+                def get_val(key):
+                    v = row.get(key)
+                    if v is None or v == "": return None
+                    return v
 
-            for index, row in df.iterrows():
-                try:
-                    product_name = row.get('name')
-                    sku = row.get('sku')
-                    if pd.isna(sku) and pd.isna(product_name):
-                        continue
-                        
-                    if pd.isna(sku):
-                        continue # strict about SKU
+                product_name = get_val('name')
+                sku = get_val('sku')
+                
+                if not sku and not product_name: continue
+                if not sku: continue
 
-                    # Ensure Category
-                    category_name = row.get('category', 'General')
-                    if pd.isna(category_name): category_name = 'General'
-                    
-                    category = db.query(models.Category).filter(
-                        models.Category.name == str(category_name),
-                        models.Category.tenant_id == current_user.tenant_id
-                    ).first()
-                    
-                    if not category:
-                        category = models.Category(name=str(category_name), tenant_id=current_user.tenant_id)
-                        db.add(category)
-                        db.flush()
+                # Ensure Category
+                category_name = get_val('category') or 'General'
+                
+                category = db.query(models.Category).filter(
+                     models.Category.name == str(category_name),
+                     models.Category.tenant_id == current_user.tenant_id
+                ).first()
+                if not category:
+                     category = models.Category(name=str(category_name), tenant_id=current_user.tenant_id)
+                     db.add(category)
+                     db.flush()
 
-                    # Ensure Supplier (if present)
-                    supplier_id = None
-                    supplier_name = row.get('supplier_name')
-                    if not pd.isna(supplier_name):
-                        supplier = db.query(models.Supplier).filter(models.Supplier.name == str(supplier_name), models.Supplier.tenant_id == current_user.tenant_id).first()
-                        if not supplier:
-                            supplier = models.Supplier(name=str(supplier_name), tenant_id=current_user.tenant_id)
-                            db.add(supplier)
-                            db.flush()
-                        supplier_id = supplier.id
+                # Supplier
+                supplier_id = None
+                supplier_name = get_val('supplier_name')
+                if supplier_name:
+                     supplier = db.query(models.Supplier).filter(models.Supplier.name == str(supplier_name), models.Supplier.tenant_id == current_user.tenant_id).first()
+                     if not supplier:
+                         supplier = models.Supplier(name=str(supplier_name), tenant_id=current_user.tenant_id)
+                         db.add(supplier)
+                         db.flush()
+                     supplier_id = supplier.id
 
-                    # Create/Update Product
-                    product = db.query(models.Product).filter(
-                        models.Product.sku == str(sku),
-                        models.Product.tenant_id == current_user.tenant_id
-                    ).first()
-                    
-                    price = row.get('unit_price')
-                    cost = row.get('cost_price')
-                    
-                    if not product:
-                        product = models.Product(
-                            sku=str(sku),
-                            name=str(product_name) if not pd.isna(product_name) else f"Product {sku}",
-                            category_id=category.id,
-                            unit_price=float(price) if not pd.isna(price) else 0.0,
-                            cost_price=float(cost) if not pd.isna(cost) else 0.0,
-                            supplier_id=supplier_id,
-                            tenant_id=current_user.tenant_id,
-                            data_source_id=new_ds.id # LINKED VIA CASCADE
-                        )
-                        db.add(product)
-                        db.flush() # Need ID for movement
-                    else:
-                        # Update fields and link to NEW source if relevant? 
-                        # Usually we don't overwrite source ID if it already exists, or we do?
-                        # If user wants "Delete source -> Delete data", overwriting source ID implies only oldest source matters?
-                        # Or if we upload same product from Source B, should deleting Source B delete the product?
-                        # Complex. Let's assume Master Data.
-                        # For now, let's NOT overwrite data_source_id of existing products to prevent accidental cascades.
-                        pass
+                # Product
+                product = db.query(models.Product).filter(
+                    models.Product.sku == str(sku),
+                    models.Product.tenant_id == current_user.tenant_id
+                ).first()
 
-                    # Stock Movement
-                    qty = row.get('quantity')
-                    if not pd.isna(qty):
-                        qty = int(qty)
-                        if qty > 0:
-                            mv = models.StockMovement(
-                                product_id=product.id,
-                                movement_type="INBOUND",
-                                quantity=qty,
-                                notes=f"Import via {filename}",
-                                user_id=current_user.id,
-                                tenant_id=current_user.tenant_id
-                            )
-                            db.add(mv)
-
-                    processed_count += 1
-                except Exception as inner_e:
-                     errors.append(f"Row {index}: {str(inner_e)}")
+                price = get_val('unit_price')
+                cost = get_val('cost_price')
+                
+                # Conversion helpers
+                def to_float(x):
+                    try: return float(x)
+                    except: return 0.0
+                
+                if not product:
+                    product = models.Product(
+                        sku=str(sku),
+                        name=str(product_name) if product_name else f"Product {sku}",
+                        category_id=category.id,
+                        unit_price=to_float(price),
+                        cost_price=to_float(cost),
+                        supplier_id=supplier_id,
+                        tenant_id=current_user.tenant_id,
+                        data_source_id=new_ds.id
+                    )
+                    db.add(product)
+                    db.flush()
+                
+                # Stock Movement
+                qty = get_val('quantity')
+                if qty is not None:
+                     try:
+                         q = int(qty)
+                         if q > 0:
+                             mv = models.StockMovement(
+                                 product_id=product.id,
+                                 movement_type="INBOUND",
+                                 quantity=q,
+                                 notes=f"Import via {filename}",
+                                 user_id=current_user.id,
+                                 tenant_id=current_user.tenant_id
+                             )
+                             db.add(mv)
+                     except: pass
+                
+                processed_count += 1
+            except Exception as inner_e:
+                errors.append(f"Row {index}: {str(inner_e)}")
 
         new_ds.status = models.DataSourceStatus.ACTIVE
         new_ds.last_sync_status = "COMPLETED"

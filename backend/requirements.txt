@@ -6,10 +6,7 @@ python-multipart
 python-jose[cryptography]
 passlib[bcrypt]
 python-dotenv
-pandas
 openpyxl
 groq
-openai
-google-generativeai
 httpx
 cryptography
