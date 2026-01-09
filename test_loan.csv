@@ -1,0 +1,2 @@
+loan_id,gender,married,dependents,education,self_employed,applicantincome,coapplicantincome,loanamount,loan_amount_term,credit_history,property_area,loan_status
+LP001002,Male,No,0,Graduate,No,5849,0,,360,1,Urban,Y
