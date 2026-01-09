@@ -129,8 +129,7 @@ export default function Dashboard() {
   const fetchStats = React.useCallback(async () => {
     if (!clientId) return;
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-      const res = await fetch(`${API_URL}/api/v1/dashboard/stats`, {
+      const res = await fetch('http://127.0.0.1:8000/api/v1/dashboard/stats', {
         headers: {
           'x-client-id': clientId // Pass session ID to isolate data
         }

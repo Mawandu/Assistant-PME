@@ -18,8 +18,7 @@ const DataSourceModal: React.FC<DataSourceModalProps> = ({ isOpen, onClose, onUp
 
     const fetchDataSources = async () => {
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-            const response = await fetch(`${API_URL}/api/v1/datasources/`, {
+            const response = await fetch('http://127.0.0.1:8000/api/v1/datasources/', {
                 headers: {
                     'X-Client-ID': clientId
                 }
@@ -42,8 +41,7 @@ const DataSourceModal: React.FC<DataSourceModalProps> = ({ isOpen, onClose, onUp
     const handleDelete = async (id: string) => {
         if (!confirm("Êtes-vous sûr de vouloir supprimer cette source ?")) return;
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-            const response = await fetch(`${API_URL}/api/v1/datasources/${id}`, {
+            const response = await fetch(`http://127.0.0.1:8000/api/v1/datasources/${id}`, {
                 method: 'DELETE',
                 headers: {
                     'X-Client-ID': clientId
@@ -77,8 +75,7 @@ const DataSourceModal: React.FC<DataSourceModalProps> = ({ isOpen, onClose, onUp
             // If Bearer token is needed, we need to get it from context/storage
             const token = localStorage.getItem('token'); // Example if we had auth
 
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-            const response = await fetch(`${API_URL}/api/v1/datasources/upload`, {
+            const response = await fetch('http://127.0.0.1:8000/api/v1/datasources/upload', {
                 method: 'POST',
                 headers: {
                     // 'Authorization': `Bearer ${token}`, // Uncomment if auth is active and token stored

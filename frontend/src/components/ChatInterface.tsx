@@ -69,12 +69,7 @@ const ChatInterface = ({ clientId, onDataUpdate }: { clientId: string, onDataUpd
     // Use persisted clientId from prop
     if (!clientId) return; // Wait for prop
 
-    // Derive WS URL from API URL
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-    const isSecure = API_URL.startsWith('https');
-    const wsProtocol = isSecure ? 'wss' : 'ws';
-    const wsHost = API_URL.replace(/^https?:\/\//, '');
-    const wsUrl = `${wsProtocol}://${wsHost}/api/v1/chat/ws/${clientId}`;
+    const wsUrl = `ws://127.0.0.1:8000/api/v1/chat/ws/${clientId}`;
 
     console.log('Connecting WebSocket with ID:', clientId);
     ws.current = new WebSocket(wsUrl);
