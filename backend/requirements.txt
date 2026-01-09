@@ -13,3 +13,5 @@ openai
 google-generativeai
 httpx
 cryptography
+
+pydantic[email]

@@ -16,3 +16,4 @@ google-generativeai
 httpx
 cryptography
 sqlalchemy-utils
+email-validator
