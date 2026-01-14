@@ -296,24 +296,8 @@ if prompt := st.chat_input("Posez une question sur votre stock..."):
                     result = query_service.execute(db, tenant_id, analysis)
                     response_text = result['text']
                     if result.get("chart"):
-                        # Ensure chart data is compatible with Plotly
-                        chart_data = result["chart"]
-                        # Convert frontend-ready chart struct to Plotly fig
-                        # Simple logic: keys as x, values as y
-                        chart_type = analysis['entities'].get('graph_type', 'bar')
-                        
-                        labels = chart_data['labels']
-                        values = chart_data['datasets'][0]['data']
-                        title = chart_data['datasets'][0]['label']
-                        
-                        df_chart = pd.DataFrame({'Label': labels, 'Value': values})
-                        
-                        if chart_type == 'pie':
-                            fig = px.pie(df_chart, names='Label', values='Value', title=title)
-                        else: # Default bar
-                            fig = px.bar(df_chart, x='Label', y='Value', title=title)
-                            
-                        chart = fig
+                        # The viz_service returns a Plotly Figure dict directly
+                        chart = result["chart"]
                 
                 st.markdown(response_text)
                 if chart:
