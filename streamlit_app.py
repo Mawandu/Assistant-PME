@@ -24,7 +24,16 @@ from routers import auth
 @st.cache_resource
 def get_engine():
     """Create and cache the database engine."""
-    return create_engine(DATABASE_URL, pool_pre_ping=True)
+    # Use conservative pool settings to avoid "Cannot assign requested address"
+    # pool_pre_ping=True checks liveness but can add overhead. Keeping it for stability.
+    # pool_size=5 is default, but max_overflow=10 can spike connections.
+    return create_engine(
+        DATABASE_URL, 
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=0,
+        pool_recycle=3600
+    )
 
 def get_session():
     """Create a new session using the cached engine."""
