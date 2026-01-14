@@ -279,19 +279,8 @@ if prompt := st.chat_input("Posez une question sur votre stock..."):
         with st.spinner("Analyse en cours..."):
             try:
                 # 1. Analyse Intent (NLP)
-                # Since analyze_query is async, we need to handle it. 
-                # For Streamlit sync nature, we can either use asyncio.run or check if analyze_query can be sync.
-                # I recently made it async. Let's force a sync wrapper.
-                import asyncio
-                
-                # Check for existing loop
-                try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    
-                analysis = loop.run_until_complete(nlp_service.analyze_query(prompt))
+                # nlp_service methods are synchronous, so we call them directly.
+                analysis = nlp_service.analyze_query(prompt)
                 
                 # 2. Execute Query
                 db = get_session()
@@ -302,7 +291,7 @@ if prompt := st.chat_input("Posez une question sur votre stock..."):
                 chart = None
                 
                 if analysis.get("intent") == "GENERAL_KNOWLEDGE":
-                    response_text = loop.run_until_complete(nlp_service.generate_chat_response(prompt))
+                    response_text = nlp_service.generate_chat_response(prompt)
                 else:
                     result = query_service.execute(db, tenant_id, analysis)
                     response_text = result['text']
