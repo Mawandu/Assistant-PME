@@ -163,10 +163,10 @@ with st.sidebar:
                             
                         # Standardize columns
                         column_mapping = {
-                            'product': 'name', 'nom produit': 'name', 'nom': 'name', 'designation': 'name',
-                            'sku': 'sku', 'ref': 'sku', 'reference': 'sku', 'code': 'sku',
+                            'product': 'name', 'nom produit': 'name', 'nom': 'name', 'designation': 'name', 'product_name': 'name',
+                            'sku': 'sku', 'ref': 'sku', 'reference': 'sku', 'code': 'sku', 'product_id': 'sku',
                             'category': 'category', 'catégorie': 'category', 'famille': 'category',
-                            'quantity': 'quantity', 'quantité': 'quantity', 'stock': 'quantity', 'qte': 'quantity',
+                            'quantity': 'quantity', 'quantité': 'quantity', 'stock': 'quantity', 'qte': 'quantity', 'quantity_in_stock': 'quantity',
                             'price': 'unit_price', 'prix': 'unit_price', 'prix unitaire': 'unit_price',
                             'cost': 'cost_price', 'coût': 'cost_price', 'pamp': 'cost_price',
                             'supplier': 'supplier_name', 'fournisseur': 'supplier_name'
