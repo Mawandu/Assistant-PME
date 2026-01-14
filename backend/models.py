@@ -37,6 +37,7 @@ class DataSourceStatus(str, enum.Enum):
 # --- Models ---
 class Tenant(Base):
     __tablename__ = "tenants"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_name = Column(String(255), nullable=False)
@@ -59,6 +60,7 @@ class Tenant(Base):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -79,6 +81,11 @@ class User(Base):
 
 class Category(Base):
     __tablename__ = "categories"
+    
+    __table_args__ = (
+        UniqueConstraint('tenant_id', 'name', 'parent_id', name='uq_category_name_parent'),
+        {'extend_existing': True}
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -94,10 +101,15 @@ class Category(Base):
     children = relationship("Category", back_populates="parent", cascade="all, delete-orphan")
     products = relationship("Product", back_populates="category")
 
-    __table_args__ = (UniqueConstraint('tenant_id', 'name', 'parent_id', name='uq_category_name_parent'),)
+
 
 class Warehouse(Base):
     __tablename__ = "warehouses"
+
+    __table_args__ = (
+        UniqueConstraint('tenant_id', 'code', name='uq_warehouse_code'),
+        {'extend_existing': True}
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -111,10 +123,15 @@ class Warehouse(Base):
     tenant = relationship("Tenant", back_populates="warehouses")
     stock_movements = relationship("StockMovement", back_populates="warehouse")
 
-    __table_args__ = (UniqueConstraint('tenant_id', 'code', name='uq_warehouse_code'),)
+
 
 class Supplier(Base):
     __tablename__ = "suppliers"
+
+    __table_args__ = (
+        UniqueConstraint('tenant_id', 'code', name='uq_supplier_code'),
+        {'extend_existing': True}
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -132,11 +149,21 @@ class Supplier(Base):
     tenant = relationship("Tenant", back_populates="suppliers")
     products = relationship("Product", back_populates="supplier")
 
-    __table_args__ = (UniqueConstraint('tenant_id', 'code', name='uq_supplier_code'),)
+
 
 
 class Product(Base):
     __tablename__ = "products"
+
+    __table_args__ = (
+        UniqueConstraint('tenant_id', 'sku', name='uq_product_sku'),
+        Index(
+            'ix_products_name_description_tsv', 
+            func.to_tsvector(text("'french'"), name + ' ' + description), 
+            postgresql_using='gin'
+        ),
+        {'extend_existing': True}
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -165,17 +192,16 @@ class Product(Base):
     stock_movements = relationship("StockMovement", back_populates="product", cascade="all, delete-orphan")
     data_source = relationship("DataSource", backref="products")
 
-    __table_args__ = (
-        UniqueConstraint('tenant_id', 'sku', name='uq_product_sku'),
-        Index(
-            'ix_products_name_description_tsv', 
-            func.to_tsvector(text("'french'"), name + ' ' + description), 
-            postgresql_using='gin'
-        )
-    )
+
 
 class StockMovement(Base):
     __tablename__ = "stock_movements"
+
+    __table_args__ = (
+        Index('ix_stock_movements_tenant_timestamp_desc', tenant_id, timestamp.desc()),
+        Index('ix_stock_movements_product_timestamp_desc', product_id, timestamp.desc()),
+        {'extend_existing': True}
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -198,16 +224,14 @@ class StockMovement(Base):
     warehouse = relationship("Warehouse", back_populates="stock_movements")
     user = relationship("User", back_populates="stock_movements")
 
-    __table_args__ = (
-        Index('ix_stock_movements_tenant_timestamp_desc', tenant_id, timestamp.desc()),
-        Index('ix_stock_movements_product_timestamp_desc', product_id, timestamp.desc()),
-    )
+
 
 
 # --- DataSource Model (Existing) ---
 
 class DataSource(Base):
     __tablename__ = "data_sources"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
