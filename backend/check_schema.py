@@ -1,9 +1,9 @@
 
-from database import engine
+from database import get_engine
 from sqlalchemy import inspect
 
 def check_columns():
-    inspector = inspect(engine)
+    inspector = inspect(get_engine())
     columns = inspector.get_columns('products')
     for col in columns:
         print(f"Column: {col['name']} - {col['type']}")

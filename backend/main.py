@@ -2,7 +2,7 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 
-from database import engine, Base, SessionLocal
+from database import Base, get_engine, get_session
 import models
 
 from services.nlp import nlp_service
@@ -22,7 +22,7 @@ from routers import (
     dashboard
 )
 
-Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=get_engine())
 
 app = FastAPI(
     title="Assistant PME API",
@@ -97,7 +97,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             # So I will comment it out or remove it.
             # await manager.send_personal_message(f"AI: {analysis['summary']}", websocket)
 
-            db = SessionLocal()
+            db = get_session()
             try:
                 # Use isolated session user/tenant
                 user = auth.get_or_create_session_user(db, client_id)

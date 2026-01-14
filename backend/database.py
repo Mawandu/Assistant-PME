@@ -69,13 +69,36 @@ except Exception as e:
     print(f"⚠️  Error attempting to fix/debug DATABASE_URL: {e}")
 
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Global variable to hold the engine (lazy init)
+_engine = None
+_session_local = None
+
+def get_engine():
+    """Lazy loading of the database engine."""
+    global _engine
+    if _engine is None:
+        _engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+    return _engine
+
+def get_session():
+    """Lazy loading of the SessionLocal factory."""
+    global _session_local
+    if _session_local is None:
+        _session_local = sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
+    return _session_local()
+
+# Deprecated: usage of global engine/SessionLocal should be avoided
+# Retaining for backward compatibility allows some modules to import without breaking immediately,
+# but at import time _engine is None. 
+# Ideally, we remove implicit exports, but to be safe we can use a proxy or just rely on functions.
+# For now, let's allow direct import but correct usage via functions.
+# engine = create_engine(DATABASE_URL) <--- REMOVED
+
 Base = declarative_base()
 
 # Dependency to get DB session in API endpoints
 def get_db():
-    db = SessionLocal()
+    db = get_session()
     try:
         yield db
     finally:
