@@ -5,7 +5,7 @@ from sqlalchemy import (
     Boolean, Integer, Text, Index, UniqueConstraint, DECIMAL, text
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy_utils import LtreeType
+# from sqlalchemy_utils import LtreeType <--- Removed
 from sqlalchemy.orm import relationship, declarative_base
 # from database import Base <--- REMOVED
 
@@ -95,7 +95,7 @@ class Category(Base):
     parent_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True, index=True)
     level = Column(Integer)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    path = Column(LtreeType, index=True)
+    path = Column(String(255), index=True) # Changed from LtreeType to String for compatibility
 
     # --- Relationships ---
     tenant = relationship("Tenant", back_populates="categories")

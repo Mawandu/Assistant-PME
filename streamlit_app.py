@@ -51,10 +51,6 @@ def get_session():
 @st.cache_resource
 def init_db():
     engine = get_engine()
-    # Enable ltree extension for Category path
-    with engine.connect() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS ltree;"))
-        conn.commit()
     Base.metadata.create_all(bind=engine)
 
 init_db()
@@ -179,8 +175,12 @@ with st.sidebar:
                         df.rename(columns={k:v for k,v in column_mapping.items() if k in df.columns}, inplace=True)
                         
                         processed_count = 0
+                        skipped_count = 0
                         
-                        for _, row in df.iterrows():
+                        # Debug: Show columns found
+                        st.info(f"Colonnes trouvées dans le fichier: {list(df.columns)}")
+                        
+                        for idx, row in df.iterrows():
                             try:
                                 # Helper
                                 def get(col, default=None): return row[col] if col in row and pd.notna(row[col]) else default
@@ -240,10 +240,15 @@ with st.sidebar:
                                 
                                 processed_count += 1
                             except Exception as e:
+                                skipped_count += 1
+                                if skipped_count <= 5: # Show first 5 errors only
+                                    st.warning(f"Ligne {idx} ignorée: {e} | Données: {row.to_dict()}")
                                 print(f"Skipping row: {e}")
                                 
                         db.commit()
                         st.success(f"✅ Importé {processed_count} articles avec succès !")
+                        if skipped_count > 0:
+                            st.warning(f"⚠️ {skipped_count} lignes ignorées (voir détails ci-dessus ou logs).")
                         st.session_state.messages.append({"role": "assistant", "content": f"J'ai bien reçu vos données ({processed_count} articles). Je suis prêt à les analyser !"})
                         
                 except Exception as e:
