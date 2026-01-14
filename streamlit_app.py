@@ -14,7 +14,9 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from backend.database import Base, DATABASE_URL
+# FIX: Import from 'database' directly because sys.path includes 'backend'.
+# This matches how models.py imports it, preventing "split-brain" where we have two Base classes.
+from database import Base, DATABASE_URL
 import models
 from services.nlp import nlp_service
 from services.query import query_service
