@@ -6,8 +6,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy_utils import LtreeType
-from sqlalchemy.orm import relationship
-from database import Base
+from sqlalchemy.orm import relationship, declarative_base
+# from database import Base <--- REMOVED
+
+Base = declarative_base()
 import enum
 
 # --- Enums ---

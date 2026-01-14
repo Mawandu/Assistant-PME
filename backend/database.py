@@ -94,7 +94,7 @@ def get_session():
 # For now, let's allow direct import but correct usage via functions.
 # engine = create_engine(DATABASE_URL) <--- REMOVED
 
-Base = declarative_base()
+# Base = declarative_base() <--- REMOVED (Moved to models.py to fix reloading issues)
 
 # Dependency to get DB session in API endpoints
 def get_db():

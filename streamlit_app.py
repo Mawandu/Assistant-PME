@@ -16,8 +16,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 # FIX: Import from 'database' directly because sys.path includes 'backend'.
 # This matches how models.py imports it, preventing "split-brain" where we have two Base classes.
-from database import Base, DATABASE_URL
+# FIX: Import from 'database' directly because sys.path includes 'backend'.
+# This matches how models.py imports it, preventing "split-brain" where we have two Base classes.
+from database import DATABASE_URL
 import models
+# Base is now in models to prevent reloading desync
+Base = models.Base
 from services.nlp import nlp_service
 from services.query import query_service
 from routers import auth

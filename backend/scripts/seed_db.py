@@ -8,7 +8,9 @@ from datetime import datetime, timedelta
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy.orm import Session
-from database import get_session, get_engine, Base
+from database import get_session, get_engine
+# Base moved to models
+from models import Base
 import models
 import hashing
 

@@ -2,7 +2,9 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 
-from database import Base, get_engine, get_session
+from database import get_engine, get_session
+# Base is now in models
+from models import Base
 import models
 
 from services.nlp import nlp_service

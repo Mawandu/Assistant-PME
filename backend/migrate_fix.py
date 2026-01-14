@@ -1,9 +1,9 @@
 
-from database import engine
+from database import get_engine
 from sqlalchemy import text
 
 def add_column():
-    with engine.connect() as conn:
+    with get_engine().connect() as conn:
         try:
             conn.execute(text("ALTER TABLE products ADD COLUMN data_source_id UUID REFERENCES data_sources(id) ON DELETE CASCADE;"))
             conn.commit()
