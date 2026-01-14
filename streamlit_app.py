@@ -18,8 +18,12 @@ from services.nlp import nlp_service
 from services.query import query_service
 from routers import auth
 
-# Initialize DB
-Base.metadata.create_all(bind=engine)
+# Initialize DB (Cached to avoid repeated connections)
+@st.cache_resource
+def init_db():
+    Base.metadata.create_all(bind=engine)
+
+init_db()
 
 # --- CONFIG ---
 st.set_page_config(
