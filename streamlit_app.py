@@ -12,15 +12,30 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 
-from database import SessionLocal, engine, Base
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from backend.database import Base, DATABASE_URL
 import models
 from services.nlp import nlp_service
 from services.query import query_service
 from routers import auth
 
+# --- DATABASE CONNECTION CACHING ---
+@st.cache_resource
+def get_engine():
+    """Create and cache the database engine."""
+    return create_engine(DATABASE_URL, pool_pre_ping=True)
+
+def get_session():
+    """Create a new session using the cached engine."""
+    engine = get_engine()
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    return SessionLocal()
+
 # Initialize DB (Cached to avoid repeated connections)
 @st.cache_resource
 def init_db():
+    engine = get_engine()
     Base.metadata.create_all(bind=engine)
 
 init_db()
@@ -100,121 +115,122 @@ with st.sidebar:
     if uploaded_file:
         if st.button("Importer les données"):
             try:
-                db = SessionLocal()
-                # Get user (create if needed)
-                user = auth.get_or_create_session_user(db, st.session_state.client_id)
-                
-                # We need to adapt the upload logic from data_source.py here
-                # Or call a simplified service function. 
-                # For quick deploy, let's implement a simplified ingestor here using pandas directly.
-                
-                with st.spinner("Analyse et import en cours..."):
-                    timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-                    filename = uploaded_file.name
+                db = get_session()
+                try:
+                    # Get user (create if needed)
+                    user = auth.get_or_create_session_user(db, st.session_state.client_id)
                     
-                    # Create DataSource
-                    ds = models.DataSource(
-                        name=filename,
-                        type=models.DataSourceType.FILE_UPLOAD,
-                        tenant_id=user.tenant_id,
-                        status=models.DataSourceStatus.ACTIVE,
-                        last_sync_status="COMPLETED"
-                    )
-                    db.add(ds)
-                    db.commit()
-                    db.refresh(ds)
+                    # We need to adapt the upload logic from data_source.py here
+                    # Or call a simplified service function. 
+                    # For quick deploy, let's implement a simplified ingestor here using pandas directly.
                     
-                    df = None
-                    if filename.endswith('.csv'):
-                        df = pd.read_csv(uploaded_file)
-                    else:
-                        df = pd.read_excel(uploaded_file)
+                    with st.spinner("Analyse et import en cours..."):
+                        timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+                        filename = uploaded_file.name
                         
-                    # Standardize columns
-                    column_mapping = {
-                        'product': 'name', 'nom produit': 'name', 'nom': 'name', 'designation': 'name',
-                        'sku': 'sku', 'ref': 'sku', 'reference': 'sku', 'code': 'sku',
-                        'category': 'category', 'catégorie': 'category', 'famille': 'category',
-                        'quantity': 'quantity', 'quantité': 'quantity', 'stock': 'quantity', 'qte': 'quantity',
-                        'price': 'unit_price', 'prix': 'unit_price', 'prix unitaire': 'unit_price',
-                        'cost': 'cost_price', 'coût': 'cost_price', 'pamp': 'cost_price',
-                        'supplier': 'supplier_name', 'fournisseur': 'supplier_name'
-                    }
-                    df.columns = [str(col).lower().strip() for col in df.columns]
-                    df.rename(columns={k:v for k,v in column_mapping.items() if k in df.columns}, inplace=True)
-                    
-                    processed_count = 0
-                    
-                    for _, row in df.iterrows():
-                        try:
-                            # Helper
-                            def get(col, default=None): return row[col] if col in row and pd.notna(row[col]) else default
+                        # Create DataSource
+                        ds = models.DataSource(
+                            name=filename,
+                            type=models.DataSourceType.FILE_UPLOAD,
+                            tenant_id=user.tenant_id,
+                            status=models.DataSourceStatus.ACTIVE,
+                            last_sync_status="COMPLETED"
+                        )
+                        db.add(ds)
+                        db.commit()
+                        db.refresh(ds)
+                        
+                        df = None
+                        if filename.endswith('.csv'):
+                            df = pd.read_csv(uploaded_file)
+                        else:
+                            df = pd.read_excel(uploaded_file)
                             
-                            sku = get('sku')
-                            name = get('name')
-                            if not sku and not name: continue
-                            sku = str(sku) if sku else f"GEN-{hash(name)}"
-                            
-                            # Category
-                            cat_name = str(get('category', 'General'))
-                            cat = db.query(models.Category).filter_by(name=cat_name, tenant_id=user.tenant_id).first()
-                            if not cat:
-                                cat = models.Category(name=cat_name, tenant_id=user.tenant_id)
-                                db.add(cat)
-                                db.flush()
+                        # Standardize columns
+                        column_mapping = {
+                            'product': 'name', 'nom produit': 'name', 'nom': 'name', 'designation': 'name',
+                            'sku': 'sku', 'ref': 'sku', 'reference': 'sku', 'code': 'sku',
+                            'category': 'category', 'catégorie': 'category', 'famille': 'category',
+                            'quantity': 'quantity', 'quantité': 'quantity', 'stock': 'quantity', 'qte': 'quantity',
+                            'price': 'unit_price', 'prix': 'unit_price', 'prix unitaire': 'unit_price',
+                            'cost': 'cost_price', 'coût': 'cost_price', 'pamp': 'cost_price',
+                            'supplier': 'supplier_name', 'fournisseur': 'supplier_name'
+                        }
+                        df.columns = [str(col).lower().strip() for col in df.columns]
+                        df.rename(columns={k:v for k,v in column_mapping.items() if k in df.columns}, inplace=True)
+                        
+                        processed_count = 0
+                        
+                        for _, row in df.iterrows():
+                            try:
+                                # Helper
+                                def get(col, default=None): return row[col] if col in row and pd.notna(row[col]) else default
                                 
-                            # Supplier
-                            sup_name = get('supplier_name')
-                            sup_id = None
-                            if sup_name:
-                                sup = db.query(models.Supplier).filter_by(name=str(sup_name), tenant_id=user.tenant_id).first()
-                                if not sup:
-                                    sup = models.Supplier(name=str(sup_name), tenant_id=user.tenant_id)
-                                    db.add(sup)
+                                sku = get('sku')
+                                name = get('name')
+                                if not sku and not name: continue
+                                sku = str(sku) if sku else f"GEN-{hash(name)}"
+                                
+                                # Category
+                                cat_name = str(get('category', 'General'))
+                                cat = db.query(models.Category).filter_by(name=cat_name, tenant_id=user.tenant_id).first()
+                                if not cat:
+                                    cat = models.Category(name=cat_name, tenant_id=user.tenant_id)
+                                    db.add(cat)
                                     db.flush()
-                                sup_id = sup.id
+                                    
+                                # Supplier
+                                sup_name = get('supplier_name')
+                                sup_id = None
+                                if sup_name:
+                                    sup = db.query(models.Supplier).filter_by(name=str(sup_name), tenant_id=user.tenant_id).first()
+                                    if not sup:
+                                        sup = models.Supplier(name=str(sup_name), tenant_id=user.tenant_id)
+                                        db.add(sup)
+                                        db.flush()
+                                    sup_id = sup.id
+                                    
+                                # Product
+                                prod = db.query(models.Product).filter_by(sku=sku, tenant_id=user.tenant_id).first()
+                                if not prod:
+                                    prod = models.Product(
+                                        sku=sku,
+                                        name=str(name) if name else f"Product {sku}",
+                                        category_id=cat.id,
+                                        supplier_id=sup_id,
+                                        unit_price=float(get('unit_price', 0)),
+                                        cost_price=float(get('cost_price', 0)),
+                                        tenant_id=user.tenant_id,
+                                        data_source_id=ds.id
+                                    )
+                                    db.add(prod)
+                                    db.flush()
+                                    
+                                # Stock
+                                qty = int(get('quantity', 0))
+                                if qty > 0:
+                                    mv = models.StockMovement(
+                                        product_id=prod.id,
+                                        movement_type="INBOUND",
+                                        quantity=qty,
+                                        notes="Initial Import via Streamlit",
+                                        user_id=user.id,
+                                        tenant_id=user.tenant_id
+                                    )
+                                    db.add(mv)
                                 
-                            # Product
-                            prod = db.query(models.Product).filter_by(sku=sku, tenant_id=user.tenant_id).first()
-                            if not prod:
-                                prod = models.Product(
-                                    sku=sku,
-                                    name=str(name) if name else f"Product {sku}",
-                                    category_id=cat.id,
-                                    supplier_id=sup_id,
-                                    unit_price=float(get('unit_price', 0)),
-                                    cost_price=float(get('cost_price', 0)),
-                                    tenant_id=user.tenant_id,
-                                    data_source_id=ds.id
-                                )
-                                db.add(prod)
-                                db.flush()
+                                processed_count += 1
+                            except Exception as e:
+                                print(f"Skipping row: {e}")
                                 
-                            # Stock
-                            qty = int(get('quantity', 0))
-                            if qty > 0:
-                                mv = models.StockMovement(
-                                    product_id=prod.id,
-                                    movement_type="INBOUND",
-                                    quantity=qty,
-                                    notes="Initial Import via Streamlit",
-                                    user_id=user.id,
-                                    tenant_id=user.tenant_id
-                                )
-                                db.add(mv)
-                            
-                            processed_count += 1
-                        except Exception as e:
-                            print(f"Skipping row: {e}")
-                            
-                    db.commit()
-                    st.success(f"✅ Importé {processed_count} articles avec succès !")
-                    st.session_state.messages.append({"role": "assistant", "content": f"J'ai bien reçu vos données ({processed_count} articles). Je suis prêt à les analyser !"})
-                    
-            except Exception as e:
-                st.error(f"Erreur d'import: {str(e)}")
-            finally:
-                db.close()
+                        db.commit()
+                        st.success(f"✅ Importé {processed_count} articles avec succès !")
+                        st.session_state.messages.append({"role": "assistant", "content": f"J'ai bien reçu vos données ({processed_count} articles). Je suis prêt à les analyser !"})
+                        
+                except Exception as e:
+                    st.error(f"Erreur d'import: {str(e)}")
+                finally:
+                    db.close()
 
 # --- MAIN CHAT AREA ---
 
@@ -252,7 +268,7 @@ if prompt := st.chat_input("Posez une question sur votre stock..."):
                 analysis = loop.run_until_complete(nlp_service.analyze_query(prompt))
                 
                 # 2. Execute Query
-                db = SessionLocal()
+                db = get_session()
                 user = auth.get_or_create_session_user(db, st.session_state.client_id)
                 tenant_id = str(user.tenant_id)
                 
