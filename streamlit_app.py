@@ -231,6 +231,8 @@ with st.sidebar:
                     st.error(f"Erreur d'import: {str(e)}")
                 finally:
                     db.close()
+            except Exception as e:
+                st.error(f"Erreur de connexion: {e}")
 
 # --- MAIN CHAT AREA ---
 
