@@ -155,16 +155,6 @@ class Supplier(Base):
 class Product(Base):
     __tablename__ = "products"
 
-    __table_args__ = (
-        UniqueConstraint('tenant_id', 'sku', name='uq_product_sku'),
-        Index(
-            'ix_products_name_description_tsv', 
-            func.to_tsvector(text("'french'"), name + ' ' + description), 
-            postgresql_using='gin'
-        ),
-        {'extend_existing': True}
-    )
-
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     sku = Column(String(100), nullable=False, index=True) 
@@ -192,16 +182,20 @@ class Product(Base):
     stock_movements = relationship("StockMovement", back_populates="product", cascade="all, delete-orphan")
     data_source = relationship("DataSource", backref="products")
 
+    __table_args__ = (
+        UniqueConstraint('tenant_id', 'sku', name='uq_product_sku'),
+        Index(
+            'ix_products_name_description_tsv', 
+            func.to_tsvector(text("'french'"), name + ' ' + description), 
+            postgresql_using='gin'
+        ),
+        {'extend_existing': True}
+    )
+
 
 
 class StockMovement(Base):
     __tablename__ = "stock_movements"
-
-    __table_args__ = (
-        Index('ix_stock_movements_tenant_timestamp_desc', tenant_id, timestamp.desc()),
-        Index('ix_stock_movements_product_timestamp_desc', product_id, timestamp.desc()),
-        {'extend_existing': True}
-    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -223,6 +217,12 @@ class StockMovement(Base):
     product = relationship("Product", back_populates="stock_movements")
     warehouse = relationship("Warehouse", back_populates="stock_movements")
     user = relationship("User", back_populates="stock_movements")
+
+    __table_args__ = (
+        Index('ix_stock_movements_tenant_timestamp_desc', tenant_id, timestamp.desc()),
+        Index('ix_stock_movements_product_timestamp_desc', product_id, timestamp.desc()),
+        {'extend_existing': True}
+    )
 
 
 
