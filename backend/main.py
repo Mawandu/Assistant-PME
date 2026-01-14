@@ -24,6 +24,13 @@ from routers import (
     dashboard
 )
 
+from sqlalchemy import text
+# ... imports ...
+# Ensure extensions exist
+with get_engine().connect() as conn:
+    conn.execute(text("CREATE EXTENSION IF NOT EXISTS ltree;"))
+    conn.commit()
+
 Base.metadata.create_all(bind=get_engine())
 
 app = FastAPI(

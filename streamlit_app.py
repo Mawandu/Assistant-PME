@@ -12,7 +12,7 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 # FIX: Import from 'database' directly because sys.path includes 'backend'.
 # This matches how models.py imports it, preventing "split-brain" where we have two Base classes.
@@ -51,6 +51,10 @@ def get_session():
 @st.cache_resource
 def init_db():
     engine = get_engine()
+    # Enable ltree extension for Category path
+    with engine.connect() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS ltree;"))
+        conn.commit()
     Base.metadata.create_all(bind=engine)
 
 init_db()
